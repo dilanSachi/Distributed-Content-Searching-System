@@ -30,7 +30,7 @@ public class Node implements Runnable {
         try
         {
             sock = new DatagramSocket(this.port);
-            this.reg_with_BS(sock);
+            reg_with_BS(sock);
             echo("Node started at " + this.port + ". Waiting for incoming data...");
 
             while(true)
@@ -52,7 +52,9 @@ public class Node implements Runnable {
 
                 if (command.equals("REGOK")) {
                     int node_count = Integer.parseInt(st.nextToken());
-                    if (node_count == 1) {
+                    if (node_count == 0) {
+                        echo("Succefully registered with BS... No nodes available...");
+                    } else if (node_count == 1) {
                         String neighbor_ip = st.nextToken();
                         int neighbor_port = Integer.parseInt(st.nextToken());
                         neighbours.add(new Neighbour(neighbor_ip, neighbor_port, ""));
@@ -66,13 +68,33 @@ public class Node implements Runnable {
                         neighbours.add(new Neighbour(neighbor_ii_ip, neighbor_ii_port, ""));
                         reg_with_neighbor(neighbours.get(0), sock);
                         reg_with_neighbor(neighbours.get(1), sock);
+                    } else if (node_count == 9999) {
+                        echo("Failed. There is an error in the request command...");
+                    } else if (node_count == 9998) {
+                        echo("Already registered. Unregistering and trying to re-register...");
+                        unreg_with_BS(sock);
+                        echo("Unregistering with neighbors...");
+                        for (int i = 0; i < neighbours.size(); i ++) {
+                            unreg_with_neighbor(neighbours.get(i), sock);
+                        }
+                        reg_with_BS(sock);
+                    } else if (node_count == 9997) {
+                        echo("Failed, registered to another user, try a different IP and port..");
+                    } else if (node_count == 9996) {
+                        echo("Failed, can’t register. BS full...");
+                    } else {
+                        echo("Unknown response code...");
                     }
                 } else if (command.equals("UNROK")) {
-
+                    int status = Integer.parseInt(st.nextToken());
+                    if (status == 0) {
+                        echo("Successfully unregistered with the BS...");
+                    } else if (status == 9999) {
+                        echo("Error while unregistering. IP and port may not be in the registry or command is incorrect...");
+                    }
                 } else if (command.equals("JOIN")) {
                     String neighbor_ip = st.nextToken();
                     int neighbor_port = Integer.parseInt(st.nextToken());
-                    neighbours.add(new Neighbour(neighbor_ip, neighbor_port, ""));
                     int status = 0;
                     for (int i = 0; i < neighbours.size(); i ++) {
                         if (neighbours.get(i).getIp().equals(neighbor_ip) && neighbours.get(i).getPort() == neighbor_port) {
@@ -86,7 +108,7 @@ public class Node implements Runnable {
                     String response = "JOINOK " + status;
                     response = String.format("%04d", response.length() + 5) + " " + response;
                     try {
-                        send_msg_via_socket(sock, InetAddress.getByAddress(neighbor_ip.getBytes()), neighbor_port, response);
+                        send_msg_via_socket(sock, InetAddress.getByName(neighbor_ip), neighbor_port, response);
                     } catch (UnknownHostException e) {
                         e.printStackTrace();
                     }
@@ -94,73 +116,31 @@ public class Node implements Runnable {
                     int status = Integer.parseInt(st.nextToken());
                     if (status == 0) {
                         echo("Successfully joined with node");
-                    } else {
+                    } else if (status == 9999) {
+                        echo("Error while adding new node to routing table...");
+                    }
+                    else {
                         echo("Error when joining. Status code - " + status);
                     }
+                } else if (command.equals("LEAVE")) {
+                    String neighbor_ip = st.nextToken();
+                    int neighbor_port = Integer.parseInt(st.nextToken());
+                    for (int i = 0; i < neighbours.size(); i ++) {
+                        if (neighbours.get(i).getIp().equals(neighbor_ip) && neighbours.get(i).getPort() == neighbor_port) {
+                            neighbours.remove(i);
+                            break;
+                        }
+                    }
+                } else if (command.equals("LEAVEOK")) {
+                    int status = Integer.parseInt(st.nextToken());
+                    if (status == 0) {
+                        echo("Successfully left the connection with node " + incoming.getAddress().getHostAddress() + " : " + incoming.getPort());
+                    } else if (status == 9999) {
+                        echo("Error while leaving the connection with node " + incoming.getAddress().getHostAddress() + " : " + incoming.getPort());
+                    } else {
+                        echo("Error when leaving. Status code - " + status);
+                    }
                 }
-//                    int port = Integer.parseInt(st.nextToken());
-//                    String username = st.nextToken();
-//                    if (nodes.size() == 0) {
-//                        reply += "0";
-//                        nodes.add(new Neighbour(ip, port, username));
-//                    } else {
-//                        boolean isOkay = true;
-//                        for (int i=0; i<nodes.size(); i++) {
-//                            if (nodes.get(i).getPort() == port) {
-//                                if (nodes.get(i).getUsername().equals(username)) {
-//                                    reply += "9998";
-//                                } else {
-//                                    reply += "9997";
-//                                }
-//                                isOkay = false;
-//                            }
-//                        }
-//                        if (isOkay) {
-//                            if (nodes.size() == 1) {
-//                                reply += "1 " + nodes.get(0).getIp() + " " + nodes.get(0).getPort();
-//                            } else if (nodes.size() == 2) {
-//                                reply += "2 " + nodes.get(0).getIp() + " " + nodes.get(0).getPort() + " " + nodes.get(1).getIp() + " " + nodes.get(1).getPort();
-//                            } else {
-//                                Random r = new Random();
-//                                int Low = 0;
-//                                int High = nodes.size();
-//                                int random_1 = r.nextInt(High-Low) + Low;
-//                                int random_2 = r.nextInt(High-Low) + Low;
-//                                while (random_1 == random_2) {
-//                                    random_2 = r.nextInt(High-Low) + Low;
-//                                }
-//                                echo (random_1 + " " + random_2);
-//                                reply += "2 " + nodes.get(random_1).getIp() + " " + nodes.get(random_1).getPort() + " " + nodes.get(random_2).getIp() + " " + nodes.get(random_2).getPort();
-//                            }
-//                            nodes.add(new Neighbour(ip, port, username));
-//                        }
-//                    }
-//
-//                    reply = String.format("%04d", reply.length() + 5) + " " + reply;
-//
-//                    DatagramPacket dpReply = new DatagramPacket(reply.getBytes() , reply.getBytes().length , incoming.getAddress() , incoming.getPort());
-//                    sock.send(dpReply);
-//                } else if (command.equals("UNREG")) {
-//                    String ip = st.nextToken();
-//                    int port = Integer.parseInt(st.nextToken());
-//                    String username = st.nextToken();
-//                    for (int i=0; i<nodes.size(); i++) {
-//                        if (nodes.get(i).getPort() == port) {
-//                            nodes.remove(i);
-//                            String reply = "0012 UNROK 0";
-//                            DatagramPacket dpReply = new DatagramPacket(reply.getBytes() , reply.getBytes().length , incoming.getAddress() , incoming.getPort());
-//                            sock.send(dpReply);
-//                        }
-//                    }
-//                } else if (command.equals("ECHO")) {
-//                    for (int i=0; i<nodes.size(); i++) {
-//                        echo(nodes.get(i).getIp() + " " + nodes.get(i).getPort() + " " + nodes.get(i).getUsername());
-//                    }
-//                    String reply = "0012 ECHOK 0";
-//                    DatagramPacket dpReply = new DatagramPacket(reply.getBytes() , reply.getBytes().length , incoming.getAddress() , incoming.getPort());
-//                    sock.send(dpReply);
-//                }
-
             }
         }
 
@@ -181,20 +161,38 @@ public class Node implements Runnable {
         }
     }
 
-    public void unreg_with_BS() {}
+    public void unreg_with_BS(DatagramSocket socket) {
+        try {
+            String request = "UNREG " + this.ip_address + " " + this.port + " " + this.username;
+            request = String.format("%04d", request.length() + 5) + " " + request;
+            InetAddress bs_address = InetAddress.getLocalHost();
+            send_msg_via_socket(socket, bs_address, 55555, request);
+        } catch (Exception e) {
+            e.printStackTrace();
+        }
+    }
 
     public void reg_with_neighbor(Neighbour neighbour, DatagramSocket socket) {
         try {
             String request = "JOIN " + this.ip_address + " " + this.port;
             request = String.format("%04d", request.length() + 5) + " " + request;
-            InetAddress bs_address = InetAddress.getByAddress(neighbour.getIp().getBytes());
+            InetAddress bs_address = InetAddress.getByName(neighbour.getIp());
             send_msg_via_socket(socket, bs_address, neighbour.getPort(), request);
         } catch (Exception e) {
             e.printStackTrace();
         }
     }
 
-    public void unreg_with_neighbor() {}
+    public void unreg_with_neighbor(Neighbour neighbour, DatagramSocket socket) {
+        try {
+            String request = "LEAVE " + this.ip_address + " " + this.port;
+            request = String.format("%04d", request.length() + 5) + " " + request;
+            InetAddress bs_address = InetAddress.getByName(neighbour.getIp());
+            send_msg_via_socket(socket, bs_address, neighbour.getPort(), request);
+        } catch (Exception e) {
+            e.printStackTrace();
+        }
+    }
 
     public String getIp_address() {
         return ip_address;
