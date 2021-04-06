@@ -3,10 +3,7 @@ import java.net.DatagramPacket;
 import java.net.DatagramSocket;
 import java.net.InetAddress;
 import java.net.UnknownHostException;
-import java.util.ArrayList;
-import java.util.List;
-import java.util.Random;
-import java.util.StringTokenizer;
+import java.util.*;
 
 public class Node implements Runnable {
 
@@ -15,7 +12,7 @@ public class Node implements Runnable {
     private String username;
 
     private ArrayList<Neighbour> neighbours = new ArrayList<Neighbour>();
-    private File[] my_files;
+    private HashMap<String, File> my_files;
 
     public Node(String ip_address, int port, String username) {
         this.ip_address = ip_address;
@@ -27,14 +24,12 @@ public class Node implements Runnable {
         DatagramSocket sock = null;
         String s;
 
-        try
-        {
+        try {
             sock = new DatagramSocket(this.port);
             reg_with_BS(sock);
             echo("Node started at " + this.port + ". Waiting for incoming data...");
 
-            while(true)
-            {
+            while(true) {
                 byte[] buffer = new byte[65536];
                 DatagramPacket incoming = new DatagramPacket(buffer, buffer.length);
                 sock.receive(incoming);
@@ -74,7 +69,7 @@ public class Node implements Runnable {
                         echo("Already registered. Unregistering and trying to re-register...");
                         unreg_with_BS(sock);
                         echo("Unregistering with neighbors...");
-                        for (int i = 0; i < neighbours.size(); i ++) {
+                        for (int i = 0; i < neighbours.size(); i++) {
                             unreg_with_neighbor(neighbours.get(i), sock);
                         }
                         reg_with_BS(sock);
@@ -96,7 +91,7 @@ public class Node implements Runnable {
                     String neighbor_ip = st.nextToken();
                     int neighbor_port = Integer.parseInt(st.nextToken());
                     int status = 0;
-                    for (int i = 0; i < neighbours.size(); i ++) {
+                    for (int i = 0; i < neighbours.size(); i++) {
                         if (neighbours.get(i).getIp().equals(neighbor_ip) && neighbours.get(i).getPort() == neighbor_port) {
                             status = 9999;
                             break;
@@ -118,14 +113,13 @@ public class Node implements Runnable {
                         echo("Successfully joined with node");
                     } else if (status == 9999) {
                         echo("Error while adding new node to routing table...");
-                    }
-                    else {
+                    } else {
                         echo("Error when joining. Status code - " + status);
                     }
                 } else if (command.equals("LEAVE")) {
                     String neighbor_ip = st.nextToken();
                     int neighbor_port = Integer.parseInt(st.nextToken());
-                    for (int i = 0; i < neighbours.size(); i ++) {
+                    for (int i = 0; i < neighbours.size(); i++) {
                         if (neighbours.get(i).getIp().equals(neighbor_ip) && neighbours.get(i).getPort() == neighbor_port) {
                             neighbours.remove(i);
                             break;
@@ -140,17 +134,89 @@ public class Node implements Runnable {
                     } else {
                         echo("Error when leaving. Status code - " + status);
                     }
+                } else if (command.equals("SER")) {
+                    String requester_ip = st.nextToken();
+                    int requester_port = Integer.parseInt(st.nextToken());
+                    String query = st.nextToken();
+                    int hops = Integer.parseInt(st.nextToken());
+                    String[] search_result = find_file(query);
+                    try {
+                        if (hops > 0) {
+                            Neighbour requester = new Neighbour(requester_ip, requester_port, "");
+                            for (int i = 0; i < neighbours.size(); i++) {
+                                if (requester.getPort() != neighbours.get(i).getPort() && !requester.getIp().equals(neighbours.get(i).getIp())) {
+                                    search_file_in_neighbor(neighbours.get(i), requester, query, hops - 1, sock);
+                                }
+                            }
+                        }
+                        if (search_result.length == 0 && hops == 0) {
+                            String response = "SEROK " + 0;
+                            response = String.format("%04d", response.length() + 5) + " " + response;
+                            try {
+                                send_msg_via_socket(sock, InetAddress.getByName(requester_ip), requester_port, response);
+                            } catch (UnknownHostException e) {
+                                e.printStackTrace();
+                            }
+                        } else if (search_result.length > 0) {
+                            String response = "SEROK " + search_result.length + ip_address + " " + port + " " + hops;
+                            for (int i = 0; i < search_result.length; i++) {
+                                response = response + " " + search_result[i];
+                            }
+                            response = String.format("%04d", response.length() + 5) + " " + response;
+                            try {
+                                send_msg_via_socket(sock, InetAddress.getByName(requester_ip), requester_port, response);
+                            } catch (UnknownHostException e) {
+                                e.printStackTrace();
+                            }
+                        }
+                    } catch (Exception e) {
+                        String response = "SEROK " + 9998;
+                        response = String.format("%04d", response.length() + 5) + " " + response;
+                        try {
+                            send_msg_via_socket(sock, InetAddress.getByName(requester_ip), requester_port, response);
+                        } catch (UnknownHostException ee) {
+                            ee.printStackTrace();
+                        }
+                    }
+                } else if (command.equals("SEROK")) {
+                    int no_files = Integer.parseInt(st.nextToken());
+                    if (no_files == 0) {
+                        echo("No files found in node " + incoming.getAddress().getHostAddress() + " : " + incoming.getPort());
+                    } else if (no_files == 9999) {
+                        echo("Failure due to node " + incoming.getAddress().getHostAddress() + " : " + incoming.getPort() + " unreachable...");
+                    } else if (no_files == 9998){
+                        echo("Error " + no_files + "in node " + incoming.getAddress().getHostAddress() + " : " + incoming.getPort());
+                    } else if (no_files > 0) {
+                        String file_owner_ip = st.nextToken();
+                        int file_owner_port = Integer.parseInt(st.nextToken());
+                        int hops = Integer.parseInt(st.nextToken());
+                        for (int i = 0; i < no_files; i ++) {
+                            echo("Found file " + st.nextToken() + " in node " + file_owner_ip + " : " + file_owner_port);
+                        }
+                    }
+                } else if (command.equals("STARTSER")) {    // query --> xxxx STARTSER Avengers 5
+                    String query = st.nextToken();
+                    int hops = Integer.parseInt(st.nextToken());
+                    String[] search_result = find_file(query);
+                    if (hops > 0) {
+                        Neighbour requester = new Neighbour(ip_address, port, "");
+                        for (int i = 0; i < neighbours.size(); i++) {
+                            search_file_in_neighbor(neighbours.get(i), requester, query, hops - 1, sock);
+                        }
+                    }
+                    if (search_result.length > 0) {
+                        for (int i = 0; i < search_result.length; i ++) {
+                            echo("Found file " + search_result[i] + " in current node...");
+                        }
+                    }
                 }
             }
-        }
-
-        catch(IOException e)
-        {
+        } catch(IOException e) {
             System.err.println("IOException " + e);
         }
     }
 
-    public void reg_with_BS(DatagramSocket socket) {
+    private void reg_with_BS(DatagramSocket socket) {
         try {
             String request = "REG " + this.ip_address + " " + this.port + " " + this.username;
             request = String.format("%04d", request.length() + 5) + " " + request;
@@ -161,7 +227,7 @@ public class Node implements Runnable {
         }
     }
 
-    public void unreg_with_BS(DatagramSocket socket) {
+    private void unreg_with_BS(DatagramSocket socket) {
         try {
             String request = "UNREG " + this.ip_address + " " + this.port + " " + this.username;
             request = String.format("%04d", request.length() + 5) + " " + request;
@@ -172,7 +238,7 @@ public class Node implements Runnable {
         }
     }
 
-    public void reg_with_neighbor(Neighbour neighbour, DatagramSocket socket) {
+    private void reg_with_neighbor(Neighbour neighbour, DatagramSocket socket) {
         try {
             String request = "JOIN " + this.ip_address + " " + this.port;
             request = String.format("%04d", request.length() + 5) + " " + request;
@@ -183,9 +249,30 @@ public class Node implements Runnable {
         }
     }
 
-    public void unreg_with_neighbor(Neighbour neighbour, DatagramSocket socket) {
+    private void unreg_with_neighbor(Neighbour neighbour, DatagramSocket socket) {
         try {
             String request = "LEAVE " + this.ip_address + " " + this.port;
+            request = String.format("%04d", request.length() + 5) + " " + request;
+            InetAddress bs_address = InetAddress.getByName(neighbour.getIp());
+            send_msg_via_socket(socket, bs_address, neighbour.getPort(), request);
+        } catch (Exception e) {
+            e.printStackTrace();
+        }
+    }
+
+    private String[] find_file(String query) {
+        String[] found_files = {};
+        for (String filename : my_files.keySet()) {
+            if (filename.contains(query.subSequence(0, query.length()))) {
+                found_files[0] = filename;
+            }
+        }
+        return found_files;
+    }
+
+    private void search_file_in_neighbor(Neighbour neighbour, Neighbour requester, String query, int hops, DatagramSocket socket) {
+        try {
+            String request = "SER " + requester.getIp() + " " + requester.getPort() + " " + query + " " + hops;
             request = String.format("%04d", request.length() + 5) + " " + request;
             InetAddress bs_address = InetAddress.getByName(neighbour.getIp());
             send_msg_via_socket(socket, bs_address, neighbour.getPort(), request);
@@ -218,7 +305,15 @@ public class Node implements Runnable {
         this.username = username;
     }
 
-    public void send_msg_via_socket(DatagramSocket socket, InetAddress bs_address, int port, String msg) {
+    public HashMap<String, File> getMy_files() {
+        return my_files;
+    }
+
+    public void setMy_files(HashMap<String, File> my_files) {
+        this.my_files = my_files;
+    }
+
+    private void send_msg_via_socket(DatagramSocket socket, InetAddress bs_address, int port, String msg) {
         try {
             DatagramPacket out_packet = new DatagramPacket(msg.getBytes(), msg.getBytes().length, bs_address, port);
             socket.send(out_packet);
@@ -227,8 +322,7 @@ public class Node implements Runnable {
         }
     }
 
-    public static void echo(String msg)
-    {
+    private static void echo(String msg) {
         System.out.println(msg);
     }
 }
