@@ -139,7 +139,7 @@ public class Node implements Runnable {
                     int requester_port = Integer.parseInt(st.nextToken());
                     String query = st.nextToken();
                     int hops = Integer.parseInt(st.nextToken());
-                    String[] search_result = find_file(query);
+                    ArrayList<String> search_result = find_file(query);
                     try {
                         if (hops > 0) {
                             Neighbour requester = new Neighbour(requester_ip, requester_port, "");
@@ -149,7 +149,7 @@ public class Node implements Runnable {
                                 }
                             }
                         }
-                        if (search_result.length == 0 && hops == 0) {
+                        if (search_result.size() == 0 && hops == 0) {
                             String response = "SEROK " + 0;
                             response = String.format("%04d", response.length() + 5) + " " + response;
                             try {
@@ -157,10 +157,10 @@ public class Node implements Runnable {
                             } catch (UnknownHostException e) {
                                 e.printStackTrace();
                             }
-                        } else if (search_result.length > 0) {
-                            String response = "SEROK " + search_result.length + ip_address + " " + port + " " + hops;
-                            for (int i = 0; i < search_result.length; i++) {
-                                response = response + " " + search_result[i];
+                        } else if (search_result.size() > 0) {
+                            String response = "SEROK " + search_result.size() + " " + ip_address + " " + port + " " + hops;
+                            for (int i = 0; i < search_result.size(); i++) {
+                                response = response + " " + search_result.get(i);
                             }
                             response = String.format("%04d", response.length() + 5) + " " + response;
                             try {
@@ -196,17 +196,20 @@ public class Node implements Runnable {
                     }
                 } else if (command.equals("STARTSER")) {    // query --> xxxx STARTSER Avengers 5
                     String query = st.nextToken();
-                    int hops = Integer.parseInt(st.nextToken());
-                    String[] search_result = find_file(query);
+                    String h = (st.nextToken());
+                    int hops = 10;
+                    echo("Hops - " + h);
+                    ArrayList<String> search_result = find_file(query);
                     if (hops > 0) {
                         Neighbour requester = new Neighbour(ip_address, port, "");
                         for (int i = 0; i < neighbours.size(); i++) {
+                            echo(neighbours.get(i).getIp() + " " + neighbours.get(i).getPort());
                             search_file_in_neighbor(neighbours.get(i), requester, query, hops - 1, sock);
                         }
                     }
-                    if (search_result.length > 0) {
-                        for (int i = 0; i < search_result.length; i ++) {
-                            echo("Found file " + search_result[i] + " in current node...");
+                    if (search_result.size() > 0) {
+                        for (int i = 0; i < search_result.size(); i ++) {
+                            echo("Found file " + search_result.get(i) + " in current node...");
                         }
                     }
                 }
@@ -260,11 +263,12 @@ public class Node implements Runnable {
         }
     }
 
-    private String[] find_file(String query) {
-        String[] found_files = {};
+    private ArrayList<String> find_file(String query) {
+        ArrayList<String> found_files = new ArrayList<String>();
         for (String filename : my_files.keySet()) {
             if (filename.contains(query.subSequence(0, query.length()))) {
-                found_files[0] = filename;
+                found_files.add(filename);
+                echo("found " + filename);
             }
         }
         return found_files;
