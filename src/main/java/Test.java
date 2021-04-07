@@ -54,9 +54,9 @@ public class Test {
         Thread thread5 = new Thread(node5);
 
         thread1.start();
-        thread2.start();
-        thread3.start();
-        thread4.start();
-        thread5.start();
+//        thread2.start();
+//        thread3.start();
+//        thread4.start();
+//        thread5.start();
     }
 }
