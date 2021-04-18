@@ -7,9 +7,11 @@ public class FileClient implements Runnable{
     private DataOutputStream dataOutputStream = null;
     private DataInputStream dataInputStream = null;
     private String receivingFilename;
+    private Logger logger;
 
-    public FileClient(String receivingFilename) {
+    public FileClient(String receivingFilename, Logger logger) {
         this.receivingFilename = receivingFilename;
+        this.logger = logger;
     }
 
     @Override
@@ -35,7 +37,7 @@ public class FileClient implements Runnable{
         int bytes = 0;
         ByteArrayOutputStream received_bytes = new ByteArrayOutputStream();
         String received_hash = dataInputStream.readUTF();
-        BootstrapServer.echo("Received hash " + received_hash);
+        logger.logMsg("Received hash " + received_hash);
 
         byte[] buffer = new byte[4*1024];
         while ((bytes = dataInputStream.read(buffer, 0, buffer.length)) != -1) {
@@ -44,13 +46,13 @@ public class FileClient implements Runnable{
         File received_file = new File(fileName);
         received_file.setValue(received_bytes.toString("UTF-8"));
 
-        BootstrapServer.echo("Received file " + received_file.getFilename() + " has size - " + received_file.getSize());
-        BootstrapServer.echo("Received file " + received_file.getFilename() + " has hash - " + received_file.getHash());
-//        BootstrapServer.echo("Received data " + received_file.getValue().substring(0, 200));
+        logger.logMsg("Received file " + received_file.getFilename() + " has size - " + received_file.getSize());
+        logger.logMsg("Received file " + received_file.getFilename() + " has hash - " + received_file.getHash());
+//        logger.logMsg("Received data " + received_file.getValue().substring(0, 200));
         if (received_file.validateFileWithHash(received_hash)) {
-            BootstrapServer.echo("Received file is not corrupt...");
+            logger.logMsg("Received file is not corrupt...");
         } else {
-            BootstrapServer.echo("Hashes does not match. Files are probably corrupt...");
+            logger.logMsg("Hashes does not match. Files are probably corrupt...");
         }
 
     }

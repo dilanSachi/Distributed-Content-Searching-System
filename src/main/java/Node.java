@@ -10,6 +10,8 @@ public class Node implements Runnable {
     private String ip_address;
     private int port;
     private String username;
+    private int max_hops;
+    private Logger logger;
 
     private static String[] availableFiles = new String[]{"Adventures of Tintin", "Jack and Jill", "Glee", "The Vampire Diarie",
             "King Arthur", "Windows XP", "Harry Potter", "Kung Fu Panda", "Lady Gaga", "Twilight", "Windows 8",
@@ -19,10 +21,11 @@ public class Node implements Runnable {
     private ArrayList<Neighbour> neighbours = new ArrayList<Neighbour>();
     private HashMap<String, File> my_files;
 
-    public Node(String ip_address, int port, String username) {
+    public Node(String ip_address, int port, String username, Logger logger) {
         this.ip_address = ip_address;
         this.port = port;
         this.username = username;
+        this.logger = logger;
     }
 
     public void run() {
@@ -32,7 +35,7 @@ public class Node implements Runnable {
         try {
             sock = new DatagramSocket(this.port);
             reg_with_BS(sock);
-            BootstrapServer.echo("Node started at " + this.port + ". Waiting for incoming data...");
+            logger.logMsg("Node started at " + this.port + ". Waiting for incoming data...");
 
             while(true) {
                 byte[] buffer = new byte[65536];
@@ -42,9 +45,9 @@ public class Node implements Runnable {
                 byte[] data = incoming.getData();
                 s = new String(data, 0, incoming.getLength());
 
-                //BootstrapServer.echo the details of incoming data - client ip : client port - client message
-                BootstrapServer.echo(incoming.getAddress().getHostAddress() + " : " + incoming.getPort() + " - " + s);
-
+                //logger.logMsg the details of incoming data - client ip : client port - client message
+                logger.logMsg(incoming.getAddress().getHostAddress() + " : " + incoming.getPort() + " - " + s);
+                s = s.replace("\n", "");
                 StringTokenizer st = new StringTokenizer(s, " ");
 
                 String length = st.nextToken();
@@ -53,21 +56,21 @@ public class Node implements Runnable {
                 if (command.equals("REGOK")) {
                     int node_count = Integer.parseInt(st.nextToken());
                     if (node_count == 0) {
-                        BootstrapServer.echo("Succefully registered with BS... No nodes available...");
+                        logger.logMsg("Succefully registered with BS... No nodes available...");
                     } else if (node_count == 9999) {
-                        BootstrapServer.echo("Failed. There is an error in the request command...");
+                        logger.logMsg("Failed. There is an error in the request command...");
                     } else if (node_count == 9998) {
-                        BootstrapServer.echo("Already registered. Unregistering and trying to re-register...");
+                        logger.logMsg("Already registered. Unregistering and trying to re-register...");
                         unreg_with_BS(sock);
-                        BootstrapServer.echo("Unregistering with neighbors...");
+                        logger.logMsg("Unregistering with neighbors...");
                         for (Neighbour neighbour : neighbours) {
                             unreg_with_neighbor(neighbour, sock);
                         }
                         reg_with_BS(sock);
                     } else if (node_count == 9997) {
-                        BootstrapServer.echo("Failed, registered to another user, try a different IP and port..");
+                        logger.logMsg("Failed, registered to another user, try a different IP and port..");
                     } else if (node_count == 9996) {
-                        BootstrapServer.echo("Failed, can’t register. BS full...");
+                        logger.logMsg("Failed, can’t register. BS full...");
                     } else if (node_count > 0) {
                         ArrayList<Neighbour> temp_neighbors = new ArrayList<Neighbour>();
                         for (int i = 0; i < node_count; i ++) {
@@ -89,14 +92,14 @@ public class Node implements Runnable {
                             reg_with_neighbor(neighbours.get(1), sock);
                         }
                     } else {
-                        BootstrapServer.echo("Unknown response code...");
+                        logger.logMsg("Unknown response code...");
                     }
                 } else if (command.equals("UNROK")) {
                     int status = Integer.parseInt(st.nextToken());
                     if (status == 0) {
-                        BootstrapServer.echo("Successfully unregistered with the BS...");
+                        logger.logMsg("Successfully unregistered with the BS...");
                     } else if (status == 9999) {
-                        BootstrapServer.echo("Error while unregistering. IP and port may not be in the registry or command is incorrect...");
+                        logger.logMsg("Error while unregistering. IP and port may not be in the registry or command is incorrect...");
                     }
                 } else if (command.equals("JOIN")) {
                     String neighbor_ip = st.nextToken();
@@ -121,11 +124,11 @@ public class Node implements Runnable {
                 } else if (command.equals("JOINOK")) {
                     int status = Integer.parseInt(st.nextToken());
                     if (status == 0) {
-                        BootstrapServer.echo("Successfully joined with node");
+                        logger.logMsg("Successfully joined with node");
                     } else if (status == 9999) {
-                        BootstrapServer.echo("Error while adding new node to routing table...");
+                        logger.logMsg("Error while adding new node to routing table...");
                     } else {
-                        BootstrapServer.echo("Error when joining. Status code - " + status);
+                        logger.logMsg("Error when joining. Status code - " + status);
                     }
                 } else if (command.equals("LEAVE")) {
                     String neighbor_ip = st.nextToken();
@@ -139,11 +142,11 @@ public class Node implements Runnable {
                 } else if (command.equals("LEAVEOK")) {
                     int status = Integer.parseInt(st.nextToken());
                     if (status == 0) {
-                        BootstrapServer.echo("Successfully left the connection with node " + incoming.getAddress().getHostAddress() + " : " + incoming.getPort());
+                        logger.logMsg("Successfully left the connection with node " + incoming.getAddress().getHostAddress() + " : " + incoming.getPort());
                     } else if (status == 9999) {
-                        BootstrapServer.echo("Error while leaving the connection with node " + incoming.getAddress().getHostAddress() + " : " + incoming.getPort());
+                        logger.logMsg("Error while leaving the connection with node " + incoming.getAddress().getHostAddress() + " : " + incoming.getPort());
                     } else {
-                        BootstrapServer.echo("Error when leaving. Status code - " + status);
+                        logger.logMsg("Error when leaving. Status code - " + status);
                     }
                 } else if (command.equals("SER")) {
                     String requester_ip = st.nextToken();
@@ -156,7 +159,7 @@ public class Node implements Runnable {
                             Neighbour requester = new Neighbour(requester_ip, requester_port, "");
                             for (Neighbour neighbour : neighbours) {
                                 if (requester.getPort() != neighbour.getPort() || !requester.getIp().equals(neighbour.getIp())) {
-                                    BootstrapServer.echo("searching in neighbor");
+                                    logger.logMsg("searching in neighbor");
                                     search_file_in_neighbor(neighbour, requester, query, hops - 1, sock);
                                 }
                             }
@@ -193,33 +196,33 @@ public class Node implements Runnable {
                 } else if (command.equals("SEROK")) {
                     int no_files = Integer.parseInt(st.nextToken());
                     if (no_files == 0) {
-                        BootstrapServer.echo("No files found in node " + incoming.getAddress().getHostAddress() + " : " + incoming.getPort());
+                        logger.logMsg("No files found in node " + incoming.getAddress().getHostAddress() + " : " + incoming.getPort());
                     } else if (no_files == 9999) {
-                        BootstrapServer.echo("Failure due to node " + incoming.getAddress().getHostAddress() + " : " + incoming.getPort() + " unreachable...");
+                        logger.logMsg("Failure due to node " + incoming.getAddress().getHostAddress() + " : " + incoming.getPort() + " unreachable...");
                     } else if (no_files == 9998){
-                        BootstrapServer.echo("Error " + no_files + "in node " + incoming.getAddress().getHostAddress() + " : " + incoming.getPort());
+                        logger.logMsg("Error " + no_files + "in node " + incoming.getAddress().getHostAddress() + " : " + incoming.getPort());
                     } else if (no_files > 0) {
                         String file_owner_ip = st.nextToken();
                         int file_owner_port = Integer.parseInt(st.nextToken());
                         int hops = Integer.parseInt(st.nextToken());
                         for (int i = 0; i < no_files; i ++) {
-                            BootstrapServer.echo("Found file " + st.nextToken() + " in node " + file_owner_ip + " : " + file_owner_port);
+                            logger.logMsg("Found file " + st.nextToken() + " in node " + file_owner_ip + " : " + file_owner_port + " in " + (max_hops - hops) + " hops...");
                         }
                     }
                 } else if (command.equals("STARTSER")) {    // query --> xxxx STARTSER Avengers 5
                     String query = st.nextToken();
-                    int hops = Integer.parseInt(st.nextToken());
+                    max_hops = Integer.parseInt(st.nextToken());
                     ArrayList<String> search_result = find_file(query);
-                    if (hops > 0) {
+                    if (max_hops > 0) {
                         Neighbour requester = new Neighbour(ip_address, port, "");
                         for (Neighbour neighbour : neighbours) {
-                            BootstrapServer.echo(neighbour.getIp() + " " + neighbour.getPort());
-                            search_file_in_neighbor(neighbour, requester, query, hops - 1, sock);
+                            logger.logMsg(neighbour.getIp() + " " + neighbour.getPort());
+                            search_file_in_neighbor(neighbour, requester, query, max_hops - 1, sock);
                         }
                     }
                     if (search_result.size() > 0) {
                         for (String value : search_result) {
-                            BootstrapServer.echo("Found file " + value + " in current node...");
+                            logger.logMsg("Found file " + value + " in current node...");
                         }
                     }
                 } else if (command.equals("SHOWFILES")) {
@@ -227,14 +230,14 @@ public class Node implements Runnable {
                     for (String filename: my_files.keySet()) {
                         response.append(" ").append(filename);
                     }
-                    BootstrapServer.echo(response.toString());
+                    logger.logMsg(response.toString());
                     send_msg_via_socket(sock, InetAddress.getByName(incoming.getAddress().getHostAddress()), incoming.getPort(), response.toString());
                 } else if (command.equals("SHOWRTABLE")) {
                     StringBuilder response = new StringBuilder("Node " + ip_address + " : " + port + " has neighbors -");
                     for (Neighbour neighbour : neighbours) {
                         response.append(" ").append(neighbour.getIp()).append(": ").append(neighbour.getPort());
                     }
-                    BootstrapServer.echo(response.toString());
+                    logger.logMsg(response.toString());
                     send_msg_via_socket(sock, InetAddress.getByName(incoming.getAddress().getHostAddress()), incoming.getPort(), response.toString());
                 } else if (command.equals("DLOADR")) {
                     String owner_ip = st.nextToken();
@@ -246,6 +249,8 @@ public class Node implements Runnable {
                     int requester_port = Integer.parseInt(st.nextToken());
                     String requested_filename = st.nextToken();
                     handle_file_exchange(requester_ip, requester_port, requested_filename);
+                } else {
+                    send_msg_via_socket(sock, InetAddress.getByName(incoming.getAddress().getHostAddress()), incoming.getPort(), "Not a valid command");
                 }
             }
         } catch(IOException e) {
@@ -298,11 +303,31 @@ public class Node implements Runnable {
     }
 
     private ArrayList<String> find_file(String query) {
-        ArrayList<String> found_files = new ArrayList<String>();
+        ArrayList<String> found_files = new ArrayList<>();
+        query = query.toLowerCase(Locale.ROOT);
         for (String filename : my_files.keySet()) {
-            if (filename.contains(query.subSequence(0, query.length()))) {
-                found_files.add(filename);
-                BootstrapServer.echo("found " + filename);
+            int location = filename.toLowerCase(Locale.ROOT).indexOf(query);
+            if (query.length() > filename.length()) {
+                continue;
+            }
+            if (location == 0 && (location + query.length()) == filename.length()) {
+                found_files.add(filename.replace(" ", "_"));
+                logger.logMsg("found " + filename);
+            } else if (location == 0) {
+                if (filename.substring(location + query.length(), location + query.length() + 1).equals(" ")) {
+                    found_files.add(filename.replace(" ", "_"));
+                    logger.logMsg("found " + filename);
+                }
+            } else if (location + query.length() == filename.length()) {
+                if (filename.substring(location - 1, location).equals(" ")) {
+                    found_files.add(filename.replace(" ", "_"));
+                    logger.logMsg("found " + filename);
+                }
+            } else if (location > 0) {
+                if (filename.substring(location - 1, location).equals(" ") && filename.substring(location + query.length(), location + query.length() + 1).equals(" ")) {
+                    found_files.add(filename.replace(" ", "_"));
+                    logger.logMsg("found " + filename);
+                }
             }
         }
         return found_files;
@@ -321,7 +346,7 @@ public class Node implements Runnable {
 
     private void send_download_request(String owner_ip, int owner_port, String filename, DatagramSocket socket) {
         try {
-            FileClient fileClient = new FileClient(filename);
+            FileClient fileClient = new FileClient(filename, logger);
             new Thread(fileClient).start();
             String request = "DLOAD " + ip_address + " " + port + " " + filename;
             request = String.format("%04d", request.length() + 5) + " " + request;
@@ -333,7 +358,7 @@ public class Node implements Runnable {
     }
 
     private void handle_file_exchange(String requester_ip, int requester_port, String requested_filename) {
-        FileServer file_server = new FileServer(requested_filename);
+        FileServer file_server = new FileServer(requested_filename, logger);
         file_server.setFile(new File(requested_filename));
         new Thread(file_server).start();
     }
@@ -394,7 +419,8 @@ public class Node implements Runnable {
         int tPort = Integer.parseInt(args[0]);
         String tUsername = args[1];
         try {
-            Node node = new Node(InetAddress.getLocalHost().getHostAddress(), tPort, tUsername);
+            Logger logger = new Logger(tUsername + ".txt");
+            Node node = new Node(InetAddress.getLocalHost().getHostAddress(), tPort, tUsername, logger);
             node.setMy_files(getRandomFileSet());
             new Thread(node).start();
         } catch (UnknownHostException e) {

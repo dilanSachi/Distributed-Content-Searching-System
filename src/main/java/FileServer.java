@@ -11,15 +11,17 @@ public class FileServer implements Runnable{
     private DataOutputStream dataOutputStream = null;
     private DataInputStream dataInputStream = null;
     private String sendingFilename;
+    private Logger logger;
 
-    public FileServer(String sendingFilename) {
+    public FileServer(String sendingFilename, Logger logger) {
         this.sendingFilename = sendingFilename;
+        this.logger = logger;
     }
 
     @Override
     public void run() {
         genFile();
-        BootstrapServer.echo(file.getHash());
+        logger.logMsg(file.getHash());
 
         try (Socket socket = new Socket("localhost",5000)) {
             dataInputStream = new DataInputStream(socket.getInputStream());
@@ -46,9 +48,9 @@ public class FileServer implements Runnable{
 
     private void sendFile(String path) throws Exception{
         int bytes = 0;
-        BootstrapServer.echo("Sending file " + file.getFilename() + " has size - " + file.getSize());
-        BootstrapServer.echo("Sending file " + file.getFilename() + " has hash - " + file.getHash());
-//        BootstrapServer.echo("sending data " + file.getValue().substring(0, 200));
+        logger.logMsg("Sending file " + file.getFilename() + " has size - " + file.getSize());
+        logger.logMsg("Sending file " + file.getFilename() + " has hash - " + file.getHash());
+//        logger.logMsg("sending data " + file.getValue().substring(0, 200));
         InputStream stream = new ByteArrayInputStream(file.getValue().getBytes(StandardCharsets.UTF_8));
 
         dataOutputStream.writeUTF(file.getHash());
