@@ -1,6 +1,4 @@
-import java.io.DataInputStream;
-import java.io.DataOutputStream;
-import java.io.FileOutputStream;
+import java.io.*;
 import java.net.ServerSocket;
 import java.net.Socket;
 
@@ -8,6 +6,11 @@ public class FileClient implements Runnable{
 
     private DataOutputStream dataOutputStream = null;
     private DataInputStream dataInputStream = null;
+    private String receivingFilename;
+
+    public FileClient(String receivingFilename) {
+        this.receivingFilename = receivingFilename;
+    }
 
     @Override
     public void run() {
@@ -18,7 +21,7 @@ public class FileClient implements Runnable{
             dataInputStream = new DataInputStream(clientSocket.getInputStream());
             dataOutputStream = new DataOutputStream(clientSocket.getOutputStream());
 
-            receiveFile("NewFile1.pdf");
+            receiveFile("NewFile1.txt");
 
             dataInputStream.close();
             dataOutputStream.close();
@@ -30,14 +33,25 @@ public class FileClient implements Runnable{
 
     private void receiveFile(String fileName) throws Exception{
         int bytes = 0;
-        FileOutputStream fileOutputStream = new FileOutputStream(fileName);
+        ByteArrayOutputStream received_bytes = new ByteArrayOutputStream();
+        String received_hash = dataInputStream.readUTF();
+        BootstrapServer.echo("Received hash " + received_hash);
 
-        long size = dataInputStream.readLong();     // read file size
         byte[] buffer = new byte[4*1024];
-        while (size > 0 && (bytes = dataInputStream.read(buffer, 0, (int)Math.min(buffer.length, size))) != -1) {
-            fileOutputStream.write(buffer,0,bytes);
-            size -= bytes;      // read upto file size
+        while ((bytes = dataInputStream.read(buffer, 0, buffer.length)) != -1) {
+            received_bytes.write(buffer, 0, bytes);
         }
-        fileOutputStream.close();
+        File received_file = new File(fileName);
+        received_file.setValue(received_bytes.toString("UTF-8"));
+
+        BootstrapServer.echo("Received file " + received_file.getFilename() + " has size - " + received_file.getSize());
+        BootstrapServer.echo("Received file " + received_file.getFilename() + " has hash - " + received_file.getHash());
+//        BootstrapServer.echo("Received data " + received_file.getValue().substring(0, 200));
+        if (received_file.validateFileWithHash(received_hash)) {
+            BootstrapServer.echo("Received file is not corrupt...");
+        } else {
+            BootstrapServer.echo("Hashes does not match. Files are probably corrupt...");
+        }
+
     }
 }

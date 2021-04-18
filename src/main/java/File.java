@@ -12,7 +12,6 @@ public class File implements Serializable {
     public File (String filename, String value) {
         this.filename = filename;
         this.value = value;
-
     }
 
     public File (String filename) {
@@ -51,6 +50,10 @@ public class File implements Serializable {
         return hash;
     }
 
+    public int getSize() {
+        return value.getBytes(StandardCharsets.UTF_8).length;
+    }
+
     private static String bytesToHex(byte[] hash) {
         StringBuilder hexString = new StringBuilder(2 * hash.length);
         for (int i = 0; i < hash.length; i++) {
@@ -61,5 +64,13 @@ public class File implements Serializable {
             hexString.append(hex);
         }
         return hexString.toString();
+    }
+
+    public boolean validateFileWithHash(String hash) {
+        if (this.hash.equals(hash)) {
+            return true;
+        } else {
+            return false;
+        }
     }
 }
