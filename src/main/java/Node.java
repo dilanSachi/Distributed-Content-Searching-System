@@ -442,12 +442,12 @@ public class Node implements Runnable {
         int tPort = Integer.parseInt(args[0]);
         String tUsername = args[1];
         try {
-            String ip_addr = InetAddress.getLocalHost().getHostAddress();
+            String ip_addr = "127.0.0.1";
             Logger logger = new Logger(ip_addr + ":" + tPort + "-" + tUsername + ".log");
             Node node = new Node(ip_addr, tPort, tUsername, logger);
             node.setMy_files(getRandomFileSet());
             new Thread(node).start();
-        } catch (UnknownHostException e) {
+        } catch (Exception e) {
             e.printStackTrace();
         }
     }
