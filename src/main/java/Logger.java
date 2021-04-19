@@ -7,7 +7,7 @@ public class Logger {
 
     public Logger(String logFilename) {
         try {
-            logFileWriter = new FileWriter(logFilename);
+            logFileWriter = new FileWriter("./logs/" + logFilename);
         } catch (IOException e) {
             e.printStackTrace();
         }
